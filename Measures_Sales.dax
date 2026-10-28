@@ -1,0 +1,45 @@
+// Day 7 measure library - DAX query view version.
+// How to use: paste into a blank DAX query tab, click "Update model with changes"
+// (or "Update model: Add new measure" above each MEASURE), then Run.
+// Requires: Sales_All, Dim_Product, Dim_Region, Dim_Customer, Dim_Date loaded,
+// relationships built, and Dim_Date marked as the Date Table.
+
+DEFINE
+    MEASURE Sales_All[Total Sales] = SUM(Sales_All[Total])
+    MEASURE Sales_All[Total Quantity] = SUM(Sales_All[Quantity])
+    MEASURE Sales_All[Order Count] = DISTINCTCOUNT(Sales_All[Order ID])
+    MEASURE Sales_All[Average Order Value] = DIVIDE([Total Sales], [Order Count])
+    MEASURE Sales_All[Total Cost] =
+        SUMX(Sales_All, Sales_All[Quantity] * RELATED(Dim_Product[Cost]))
+    MEASURE Sales_All[Total Margin] = [Total Sales] - [Total Cost]
+    MEASURE Sales_All[Margin %] = DIVIDE([Total Margin], [Total Sales])
+
+    // ALL() targets the dimension the filter comes from, not the fact table.
+    MEASURE Sales_All[% of Total Sales] =
+        DIVIDE([Total Sales], CALCULATE([Total Sales], ALL(Dim_Product)))
+
+    // IF(ISBLANK...) stops Oct-Dec (no sales yet) showing as phantom rows.
+    MEASURE Sales_All[Sales PM] =
+        IF(ISBLANK([Total Sales]), BLANK(),
+            CALCULATE([Total Sales], PREVIOUSMONTH(Dim_Date[Date])))
+    MEASURE Sales_All[MoM Growth %] = DIVIDE([Total Sales] - [Sales PM], [Sales PM])
+    MEASURE Sales_All[Sales PQ] =
+        IF(ISBLANK([Total Sales]), BLANK(),
+            CALCULATE([Total Sales], PREVIOUSQUARTER(Dim_Date[Date])))
+    MEASURE Sales_All[QoQ Growth %] = DIVIDE([Total Sales] - [Sales PQ], [Sales PQ])
+
+    // Used by the Narrative visual.
+    MEASURE Sales_All[Top Category] =
+        VAR t = TOPN(1, ALL(Dim_Product[Category]), [Total Sales], DESC)
+        RETURN MAXX(t, Dim_Product[Category])
+
+// Validation: expect 43,236.46 | 306 | 25,025.00 | 18,211.46 | 0.421 | 141.30
+EVALUATE
+ROW(
+    "Total Sales", [Total Sales],
+    "Orders", [Order Count],
+    "Total Cost", [Total Cost],
+    "Total Margin", [Total Margin],
+    "Margin %", [Margin %],
+    "Avg Order Value", [Average Order Value]
+)
